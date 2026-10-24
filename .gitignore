@@ -1,9 +1,35 @@
 .venv/
 venv/
 .env
+.env.*
+!.env.example
+**/.understand-anything/
+*.pem
+*.key
 *.pyc
 __pycache__/
 .pytest_cache/
 .idea/
 .vscode/
 outputs/
+runs/
+
+# Local tooling and working documents
+.agents/
+.codegraph/
+.cursor/
+**/docs/interview/
+**/docs/learning/
+**/docs/task_reports/
+**/docs/claims_evidence.*
+**/reports/baseline/
+handoff-*/
+
+# Internal planning and execution records
+financial-pdf-skill-eval-framework/docs/acceptance_checklist.md
+financial-pdf-skill-eval-framework/docs/eval_plan_thursday_v1.md
+financial-pdf-skill-eval-framework/docs/superpowers/plans/2026-06-05-offline-run-trace-dashboard.md
+financial-pdf-skill-eval-framework/reports/CHANGELOG_AGENT_A.md
+financial-pdf-skill-eval-framework/reports/CHANGELOG_AGENT_B.md
+financial-pdf-skill-eval-framework/reports/dataset_manifest_new_007_018.md
+financial-pdf-skill-eval-framework/reports/optimization/skillopt_iterations.md

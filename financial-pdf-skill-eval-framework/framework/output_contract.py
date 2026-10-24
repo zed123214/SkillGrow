@@ -22,6 +22,7 @@ from typing import Any
 
 from framework.context import load_config
 from framework.logger import get_logger
+from framework.sanitization import process_output_metadata, sanitize_exception_message
 
 LOG = get_logger("output_contract")
 
@@ -46,7 +47,7 @@ def _read_json(path: Path, default: Any = None) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception as e:
-        LOG.warning("failed to read %s: %s", path, e)
+        LOG.warning("failed to read JSON artifact: %s", sanitize_exception_message(e))
         return default
 
 
@@ -86,10 +87,17 @@ def validate_standard_output(output_dir: Path, profile: str = "standard") -> dic
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False, timeout=60)
     except Exception as e:
-        LOG.warning("skill validate_outputs.py failed (%s); falling back", e)
+        LOG.warning("skill validate_outputs.py failed (%s); falling back", sanitize_exception_message(e))
         return _local_validate(output_dir, profile)
     out = proc.stdout.strip()
     try:
         return json.loads(out)
     except Exception:
-        return {"output_profile": profile, "passed": proc.returncode == 0, "missing_files": [], "checked_files": [], "message": out or proc.stderr}
+        return {
+            "output_profile": profile,
+            "passed": proc.returncode == 0,
+            "missing_files": [],
+            "checked_files": [],
+            "message": "validator returned non-JSON output; process output redacted",
+            "process_output": process_output_metadata(proc.stdout, proc.stderr),
+        }

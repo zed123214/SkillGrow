@@ -26,6 +26,7 @@ import yaml
 
 from framework.context import FRAMEWORK_ROOT
 from framework.logger import get_logger
+from framework.sanitization import sanitize_exception_message
 
 LOG = get_logger("llm_judge")
 
@@ -229,8 +230,9 @@ def _deepseek_chat(config: dict[str, Any], system: str, user: str) -> str:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            err_body = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"DeepSeek HTTP {exc.code}: {err_body}") from exc
+            # Never preserve an HTTP response body: it can echo a request,
+            # credentials, or provider-specific diagnostic data.
+            raise RuntimeError(f"DeepSeek HTTP {exc.code}; response body redacted") from exc
 
     payload = _post(use_json_object=True)
     if not payload.get("choices"):
@@ -240,10 +242,10 @@ def _deepseek_chat(config: dict[str, Any], system: str, user: str) -> str:
 
     choices = payload.get("choices") or []
     if not choices:
-        raise RuntimeError(f"DeepSeek empty choices: {payload}")
+        raise RuntimeError("DeepSeek returned no choices; response payload redacted")
     content = (choices[0].get("message") or {}).get("content")
     if not content or not str(content).strip():
-        raise RuntimeError(f"DeepSeek missing message content: {payload}")
+        raise RuntimeError("DeepSeek returned empty message content; response payload redacted")
     return str(content).strip()
 
 
@@ -357,7 +359,7 @@ def run_for_case(case: dict[str, Any], config: dict[str, Any] | None = None) -> 
                 judge_result = _call_live_judge(config, case_id, judge_version, inputs)
                 judge_result["mode"] = "live"
             except Exception as exc:  # 降级为 skipped，绝不让 pipeline 失败。
-                warning = f"live judge failed, degraded to skipped: {exc}"
+                warning = f"live judge failed, degraded to skipped: {sanitize_exception_message(exc)}"
                 LOG.warning(warning)
                 judge_result = _skipped_result(case_id, judge_version, warning)
     else:

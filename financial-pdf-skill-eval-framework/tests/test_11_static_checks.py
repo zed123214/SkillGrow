@@ -51,7 +51,7 @@ def test_run_static_aggregates_overall_pass():
     assert isinstance(report, dict)
     assert "overall_pass" in report
     assert isinstance(report["checks"], dict)
-    for key in ("skill_package_ok", "case_schema_ok", "ground_truth_ok", "no_secret_leak", "no_absolute_path"):
+    for key in ("skill_package_ok", "case_schema_ok", "ground_truth_ok", "no_secret_leak", "no_absolute_path", "security_release_ok"):
         assert key in report["checks"], f"missing check: {key}"
 
 
@@ -69,5 +69,5 @@ def test_run_static_cli_outputs_json():
     data = json.loads(proc.stdout)
     assert "overall_pass" in data
     assert "checks" in data
-    for key in ("skill_package_ok", "case_schema_ok", "ground_truth_ok", "no_secret_leak", "no_absolute_path"):
+    for key in ("skill_package_ok", "case_schema_ok", "ground_truth_ok", "no_secret_leak", "no_absolute_path", "security_release_ok"):
         assert key in data["checks"]

@@ -7,8 +7,14 @@ __pycache__/
 .venv/
 venv/
 .env
+.env.*
+!.env.example
+.understand-anything/
+*.pem
+*.key
 outputs/
 !outputs/.gitkeep
+runs/
 reports/markdown/*
 !reports/markdown/.gitkeep
 reports/allure-results/*

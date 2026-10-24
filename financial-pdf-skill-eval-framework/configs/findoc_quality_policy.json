@@ -1,0 +1,8 @@
+{
+  "schema_version": "findoc.quality_policy.v1",
+  "policy_version": "2026-07-30.v1",
+  "minimum_evidence_coverage": 0.9,
+  "minimum_gt_score": 0.95,
+  "judge_failure_is_degraded": true,
+  "high_confidence_judge_fail_review": 0.8
+}

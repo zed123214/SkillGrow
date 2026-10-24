@@ -18,14 +18,32 @@ _ROOT = _HERE.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from static_tests import checks_cases, checks_ground_truth, checks_security, checks_skill_package
+from static_tests import checks_security
+
+
+def _dependency_unavailable(name: str, exc: Exception) -> dict[str, Any]:
+    """Keep the security scan usable when optional test dependencies are absent."""
+    return {
+        "name": name,
+        "passed": False,
+        "dependency_unavailable": True,
+        "message": f"offline dependency unavailable: {type(exc).__name__}",
+    }
 
 
 def run_all() -> dict[str, Any]:
-    skill = checks_skill_package.run()
-    cases = checks_cases.run()
-    gt = checks_ground_truth.run()
     sec = checks_security.run()
+    dependency_error: str | None = None
+    try:
+        from static_tests import checks_cases, checks_ground_truth, checks_skill_package
+        skill = checks_skill_package.run()
+        cases = checks_cases.run()
+        gt = checks_ground_truth.run()
+    except Exception as exc:
+        dependency_error = type(exc).__name__
+        skill = _dependency_unavailable("skill_package_ok", exc)
+        cases = _dependency_unavailable("case_schema_ok", exc)
+        gt = _dependency_unavailable("ground_truth_ok", exc)
 
     overall = (
         bool(skill["passed"]) and bool(cases["passed"])
@@ -40,6 +58,7 @@ def run_all() -> dict[str, Any]:
             "ground_truth_ok": gt["passed"],
             "no_secret_leak": sec.get("no_secret_leak", False),
             "no_absolute_path": sec.get("no_absolute_path", False),
+            "security_release_ok": sec.get("passed", False),
         },
         "details": {
             "skill_package": skill,
@@ -48,7 +67,8 @@ def run_all() -> dict[str, Any]:
             "security": sec,
         },
         "warnings": gt.get("warnings") or [],
-        "message": "" if overall else "static_tests failed; see details",
+        "dependency_error": dependency_error,
+        "message": "" if overall else "static_tests failed or dependencies are unavailable; see details",
     }
 
 

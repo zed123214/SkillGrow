@@ -24,6 +24,7 @@ from framework import (
 from framework.assertion_engine import run_validations
 from framework.context import FRAMEWORK_ROOT
 from framework.logger import get_logger
+from framework.sanitization import repository_relative_path, sanitize_exception_message
 from framework.stage_result import StageResult, failed, skipped, success, warning
 
 LOG = get_logger("pipeline")
@@ -61,11 +62,11 @@ def _stage_static_check(case: dict, *, fail_fast: bool) -> StageResult:
     try:
         from static_tests.run_static import run_all as _run_all
     except Exception as exc:  # pragma: no cover - import error means bigger problem
-        return warning("static_check", f"static_tests unavailable: {exc}")
+        return warning("static_check", f"static_tests unavailable: {sanitize_exception_message(exc)}")
     try:
         report = _run_all()
     except Exception as exc:
-        return warning("static_check", f"static_tests crashed: {exc}")
+        return warning("static_check", f"static_tests crashed: {sanitize_exception_message(exc)}")
     if report.get("overall_pass"):
         return success("static_check", payload=report)
     if fail_fast:
@@ -82,7 +83,7 @@ def _stage_invoke(case: dict, *, dry_run: bool) -> tuple[StageResult, dict]:
     if inv.get("status") == "skipped":
         return skipped("invoke", reason=inv.get("skip_reason") or "skipped", payload=dict(inv)), inv
     if inv.get("status") == "failed":
-        return failed("invoke", errors=[inv.get("stderr") or "invocation failed"], payload=dict(inv)), inv
+        return failed("invoke", errors=[inv.get("error_summary") or "invocation failed"], payload=dict(inv)), inv
     return success("invoke", payload=dict(inv)), inv
 
 
@@ -132,12 +133,12 @@ def _stage_score(case: dict, assertions: list[dict], gt_eval: dict) -> tuple[Sta
     try:
         score = scoring_model.compute_for_case(case, assertions, gt_eval, profile_path)
     except Exception as exc:
-        return failed("compute_score", errors=[f"scoring crashed: {exc}"]), None
+        return failed("compute_score", errors=[f"scoring crashed: {sanitize_exception_message(exc)}"]), None
     try:
         target = scoring_model.write_score_result(case["output_dir"], score)
         payload = {**score, "score_result_path": str(target)}
     except Exception as exc:
-        return failed("compute_score", errors=[f"failed to write score_result.json: {exc}"], payload=score), score
+        return failed("compute_score", errors=[f"failed to write score_result.json: {sanitize_exception_message(exc)}"], payload=score), score
     return success("compute_score", payload=payload), score
 
 
@@ -152,7 +153,7 @@ def _stage_judge(case: dict, score: dict | None) -> StageResult:
     try:
         from judge import llm_judge
     except Exception as exc:  # pragma: no cover - judge layer optional
-        return warning("run_judge", f"judge layer unavailable: {exc}")
+        return warning("run_judge", f"judge layer unavailable: {sanitize_exception_message(exc)}")
 
     config = llm_judge.load_judge_config()
     if not llm_judge.is_enabled(config):
@@ -161,7 +162,7 @@ def _stage_judge(case: dict, score: dict | None) -> StageResult:
     try:
         outcome = llm_judge.run_for_case(case, config)
     except Exception as exc:
-        return warning("run_judge", f"judge crashed (non-fatal): {exc}")
+        return warning("run_judge", f"judge crashed (non-fatal): {sanitize_exception_message(exc)}")
 
     dims = outcome.get("judge_dimensions") or []
     if score is not None and dims:
@@ -171,7 +172,7 @@ def _stage_judge(case: dict, score: dict | None) -> StageResult:
         try:
             scoring_model.write_score_result(case["output_dir"], score)
         except Exception as exc:  # pragma: no cover
-            return warning("run_judge", f"judge ran but score_sources rewrite failed: {exc}", payload=outcome)
+            return warning("run_judge", f"judge ran but score_sources rewrite failed: {sanitize_exception_message(exc)}", payload=outcome)
 
     payload = {
         "enabled": True,
@@ -203,14 +204,15 @@ def _trace_stage_payload(stage: StageResult) -> dict[str, Any]:
             "check_count": len(checks) if isinstance(checks, list) else None,
         }
     if stage.name == "invoke":
-        stderr = payload.get("stderr") or ""
         return {
             "backend": payload.get("backend"),
             "return_code": payload.get("return_code"),
-            "output_dir": payload.get("output_dir"),
+            "output_dir": repository_relative_path(payload.get("output_dir"), FRAMEWORK_ROOT.parent),
             "duration_seconds": payload.get("duration_seconds"),
             "skip_reason": payload.get("skip_reason"),
-            "stderr_excerpt": stderr[:500] if stderr else "",
+            "error_summary": payload.get("error_summary"),
+            "process_output": payload.get("process_output"),
+            "command_metadata": payload.get("command_metadata"),
         }
     if stage.name == "collect_artifacts":
         return {

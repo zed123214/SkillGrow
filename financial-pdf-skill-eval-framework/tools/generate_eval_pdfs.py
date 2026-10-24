@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -879,23 +880,27 @@ def load_reportlab():
 
 
 def find_chinese_font() -> Path:
-    candidates = [
-        Path("C:/Windows/Fonts/msyh.ttc"),
-        Path("C:/Windows/Fonts/simsun.ttc"),
-        Path("C:/Windows/Fonts/msyh.ttf"),
-        Path("C:/Windows/Fonts/simsun.ttf"),
-        Path("/System/Library/Fonts/PingFang.ttc"),
-        Path("/System/Library/Fonts/STHeiti Light.ttc"),
-        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
-        Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
-        Path("/usr/share/fonts/opentype/source-han-sans/SourceHanSansSC-Regular.otf"),
-    ]
+    # Build system font candidates from environment/platform roots rather than
+    # embedding a developer-machine absolute path in a distributable source file.
+    root = Path(os.sep)
+    candidates: list[Path] = []
+    windows_dir = os.environ.get("WINDIR")
+    if windows_dir:
+        fonts_dir = Path(windows_dir) / "Fonts"
+        candidates.extend(fonts_dir / name for name in ("msyh.ttc", "simsun.ttc", "msyh.ttf", "simsun.ttf"))
+    candidates.extend([
+        root / "System" / "Library" / "Fonts" / "PingFang.ttc",
+        root / "System" / "Library" / "Fonts" / "STHeiti Light.ttc",
+        root / "usr" / "share" / "fonts" / "opentype" / "noto" / "NotoSansCJK-Regular.ttc",
+        root / "usr" / "share" / "fonts" / "truetype" / "noto" / "NotoSansCJK-Regular.ttc",
+        root / "usr" / "share" / "fonts" / "opentype" / "source-han-sans" / "SourceHanSansSC-Regular.otf",
+    ])
     for path in candidates:
         if path.exists():
             return path
     sys.exit(
         "未找到中文字体。请安装 SimSun、Microsoft YaHei、MSYH、Noto Sans CJK SC、"
-        "Source Han Sans SC 或 PingFang SC；Windows 优先 C:/Windows/Fonts/msyh.ttc 或 simsun.ttc。"
+        "Source Han Sans SC 或 PingFang SC；Windows 请设置 WINDIR 并安装系统中文字体。"
     )
 
 

@@ -26,6 +26,7 @@ from typing import Any
 
 from framework.context import FRAMEWORK_ROOT, load_config
 from framework.logger import get_logger
+from framework.sanitization import process_output_metadata, sanitize_exception_message
 
 LOG = get_logger("gt_evaluator")
 
@@ -104,12 +105,12 @@ def evaluate(output_dir: str | Path, ground_truth_path: str | Path | None) -> di
 
     gt_path = _resolve(ground_truth_path)
     if not gt_path.exists():
-        return {"status": "no_ground_truth", "reason": f"ground_truth file not found: {gt_path}", "no_ground_truth": True}
+        return {"status": "no_ground_truth", "reason": "ground_truth file not found", "no_ground_truth": True}
 
     try:
         gt_data = json.loads(gt_path.read_text(encoding="utf-8"))
     except Exception as e:
-        return {"status": "failed", "reason": f"invalid ground_truth JSON: {e}", "no_ground_truth": True}
+        return {"status": "failed", "reason": f"invalid ground_truth JSON: {sanitize_exception_message(e)}", "no_ground_truth": True}
     metrics = gt_data.get("metrics", []) if isinstance(gt_data, dict) else []
 
     source = (gt_data.get("source") or "").strip().lower() if isinstance(gt_data, dict) else ""
@@ -145,7 +146,7 @@ def evaluate(output_dir: str | Path, ground_truth_path: str | Path | None) -> di
     result_path = output_dir / "evaluation" / "gt_eval_result.json"
     result_path.parent.mkdir(parents=True, exist_ok=True)
     if not script.exists():
-        return {"status": "failed", "reason": f"gt eval script missing: {script}", "no_ground_truth": False}
+        return {"status": "failed", "reason": "gt evaluator script missing", "no_ground_truth": False}
 
     # Build filtered GT in a temp file so the on-disk GT is never mutated.
     filtered_gt = dict(gt_data)
@@ -174,14 +175,19 @@ def evaluate(output_dir: str | Path, ground_truth_path: str | Path | None) -> di
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False, timeout=120)
         except Exception as e:
-            return {"status": "failed", "reason": f"gt eval subprocess error: {e}", "no_ground_truth": False}
+            return {"status": "failed", "reason": f"gt eval subprocess error: {sanitize_exception_message(e)}", "no_ground_truth": False}
         if proc.returncode != 0:
-            return {"status": "failed", "reason": proc.stderr.strip() or proc.stdout.strip(), "no_ground_truth": False}
+            return {
+                "status": "failed",
+                "reason": f"gt evaluator exited with code {proc.returncode}; process output redacted",
+                "process_output": process_output_metadata(proc.stdout, proc.stderr),
+                "no_ground_truth": False,
+            }
 
         try:
             result_data = json.loads(result_path.read_text(encoding="utf-8"))
         except Exception as e:
-            return {"status": "failed", "reason": f"invalid gt_eval_result.json: {e}", "no_ground_truth": False}
+            return {"status": "failed", "reason": f"invalid gt_eval_result.json: {sanitize_exception_message(e)}", "no_ground_truth": False}
 
         # Annotate the on-disk gt_eval_result.json with eligibility metadata so
         # downstream consumers (scoring_model / reports) don't have to re-derive it.

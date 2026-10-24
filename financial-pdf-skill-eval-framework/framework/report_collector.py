@@ -13,6 +13,7 @@ import yaml
 
 from framework import gt_evaluator, output_contract
 from framework.context import FRAMEWORK_ROOT, load_config
+from framework.sanitization import repository_relative_path
 
 
 # P0 failure taxonomy used by `write_failure_cases_markdown`.
@@ -101,7 +102,7 @@ def summarize_case(case: dict, invocation: dict | None = None, validations: list
         "case_name": case.get("name", case.get("case_id")),
         "backend": case.get("backend"),
         "output_profile": case.get("output_profile", "standard"),
-        "output_dir": str(output_dir),
+        "output_dir": repository_relative_path(output_dir, FRAMEWORK_ROOT.parent),
         "run_status": invocation.get("status") if invocation else "unknown",
         "output_contract_passed": bool(contract.get("passed")),
         "execution_backend": auth.get("execution_backend") or meta.get("execution_backend"),

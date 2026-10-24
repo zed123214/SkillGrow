@@ -19,6 +19,11 @@ from typing import Any
 
 from framework.context import FRAMEWORK_ROOT, load_config
 from framework.logger import get_logger
+from framework.sanitization import (
+    process_output_metadata,
+    safe_command_metadata,
+    sanitize_exception_message,
+)
 
 LOG = get_logger("skill_invoker")
 
@@ -40,10 +45,15 @@ def _skipped(case_id: str, backend: str, reason: str, command: str = "") -> Invo
         "backend": backend,
         "status": "skipped",
         "skip_reason": reason,
-        "command": command,
+        "command": "",
+        "command_metadata": safe_command_metadata(command),
         "return_code": None,
+        # Kept as empty strings for legacy callers. Raw streams are represented
+        # only by content-free diagnostics below.
         "stdout": "",
         "stderr": "",
+        "process_output": process_output_metadata("", ""),
+        "error_summary": None,
         "output_dir": None,
         "duration_seconds": 0.0,
     })
@@ -56,9 +66,12 @@ def _success_no_run(case_id: str, backend: str, output_dir: Path) -> InvocationR
         "status": "success",
         "skip_reason": None,
         "command": "",
+        "command_metadata": safe_command_metadata(""),
         "return_code": 0,
         "stdout": "",
         "stderr": "",
+        "process_output": process_output_metadata("", ""),
+        "error_summary": None,
         "output_dir": str(output_dir),
         "duration_seconds": 0.0,
     })
@@ -78,9 +91,12 @@ def invoke(case: dict, *, dry_run: bool = False) -> InvocationResult:
                 "status": "failed",
                 "skip_reason": None,
                 "command": "",
+                "command_metadata": safe_command_metadata(""),
                 "return_code": 1,
                 "stdout": "",
-                "stderr": f"fixture output_dir does not exist: {output_dir}",
+                "stderr": "",
+                "process_output": process_output_metadata("", ""),
+                "error_summary": "fixture output_dir does not exist",
                 "output_dir": str(output_dir),
                 "duration_seconds": 0.0,
             })
@@ -108,9 +124,12 @@ def invoke(case: dict, *, dry_run: bool = False) -> InvocationResult:
             "status": "failed",
             "skip_reason": None,
             "command": "",
+            "command_metadata": safe_command_metadata(""),
             "return_code": 2,
             "stdout": "",
-            "stderr": "case missing input_pdf",
+            "stderr": "",
+            "process_output": process_output_metadata("", ""),
+            "error_summary": "case missing input_pdf",
             "output_dir": str(output_dir),
             "duration_seconds": 0.0,
         })
@@ -136,7 +155,12 @@ def invoke(case: dict, *, dry_run: bool = False) -> InvocationResult:
             cmd.extend(["--mock-dir", str(_resolve(mock_dir))])
 
     command_str = " ".join(shlex.quote(c) for c in cmd)
-    LOG.info("invoking skill: %s", command_str)
+    command_metadata = safe_command_metadata(command_str)
+    LOG.info(
+        "invoking skill (command_sha256=%s, arg_count=%s)",
+        command_metadata["command_sha256"],
+        command_metadata["command_arg_count"],
+    )
 
     if dry_run:
         return InvocationResult({
@@ -144,10 +168,13 @@ def invoke(case: dict, *, dry_run: bool = False) -> InvocationResult:
             "backend": backend,
             "status": "dry_run",
             "skip_reason": None,
-            "command": command_str,
+            "command": "",
+            "command_metadata": command_metadata,
             "return_code": None,
             "stdout": "",
             "stderr": "",
+            "process_output": process_output_metadata("", ""),
+            "error_summary": None,
             "output_dir": str(output_dir),
             "duration_seconds": 0.0,
         })
@@ -158,20 +185,35 @@ def invoke(case: dict, *, dry_run: bool = False) -> InvocationResult:
         stdout, stderr, rc = proc.stdout, proc.stderr, proc.returncode
     except subprocess.TimeoutExpired as e:
         stdout, stderr, rc = e.stdout or "", e.stderr or "", 124
+        exception_summary = None
     except Exception as e:
-        stdout, stderr, rc = "", f"invocation error: {e}", 1
+        stdout, stderr, rc = "", "", 1
+        exception_summary = sanitize_exception_message(e)
+    else:
+        exception_summary = None
     duration = time.time() - t0
 
     status = "success" if rc == 0 else "failed"
+    if status == "success":
+        error_summary = None
+    elif exception_summary:
+        error_summary = f"skill invocation failed before completion: {exception_summary}"
+    elif rc == 124:
+        error_summary = "skill invocation timed out; process output redacted"
+    else:
+        error_summary = f"skill invocation returned non-zero exit code {rc}; process output redacted"
     return InvocationResult({
         "case_id": case_id,
         "backend": backend,
         "status": status,
         "skip_reason": None,
-        "command": command_str,
+        "command": "",
+        "command_metadata": command_metadata,
         "return_code": rc,
-        "stdout": stdout,
-        "stderr": stderr,
+        "stdout": "",
+        "stderr": "",
+        "process_output": process_output_metadata(stdout, stderr),
+        "error_summary": error_summary,
         "output_dir": str(output_dir),
         "duration_seconds": round(duration, 3),
     })

@@ -6,10 +6,16 @@
 **/.mypy_cache
 **/.ruff_cache
 **/*.pyc
+**/.understand-anything
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
 financial-pdf-skill-eval-framework/reports/allure-results
 financial-pdf-skill-eval-framework/reports/allure-html
 financial-pdf-skill-eval-framework/reports/dashboard
 financial-pdf-skill-eval-framework/reports/static
 financial-pdf-skill-eval-framework/reports/traces
 financial-pdf-skill-eval-framework/data/real_las_outputs
+financial-pdf-skill-eval-framework/runs
 .env

@@ -1,6 +1,8 @@
 """Optional allure attachment helper. No-op if allure-pytest is unavailable."""
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 try:
@@ -20,6 +22,17 @@ STANDARD_ATTACHMENTS = [
 ]
 
 
+def _redacted_attachment_metadata(path: Path, relative_path: str) -> str:
+    """Return content-free attachment metadata for a potentially sensitive artifact."""
+    data = path.read_bytes()
+    return json.dumps({
+        "path": relative_path,
+        "bytes": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "content_redacted": True,
+    }, ensure_ascii=False, indent=2)
+
+
 def attach_standard_outputs(output_dir: Path) -> None:
     if not HAS_ALLURE:
         return
@@ -29,12 +42,13 @@ def attach_standard_outputs(output_dir: Path) -> None:
         if not p.exists():
             continue
         try:
-            if p.suffix == ".json":
-                allure.attach(p.read_text(encoding="utf-8"), name=rel, attachment_type=allure.attachment_type.JSON)
-            elif p.suffix == ".md":
-                allure.attach(p.read_text(encoding="utf-8"), name=rel, attachment_type=allure.attachment_type.TEXT)
-            else:
-                allure.attach(p.read_bytes(), name=rel)
+            # The legacy profile can contain parsed source documents and model
+            # output.  Attach only a body-free inventory record by default.
+            allure.attach(
+                _redacted_attachment_metadata(p, rel),
+                name=f"{rel}.redacted-metadata",
+                attachment_type=allure.attachment_type.JSON,
+            )
         except Exception:
             pass
 
@@ -43,8 +57,21 @@ def attach_invocation(invocation: dict) -> None:
     if not HAS_ALLURE or not invocation:
         return
     try:
-        allure.attach(invocation.get("stdout", ""), name="invocation_stdout", attachment_type=allure.attachment_type.TEXT)
-        allure.attach(invocation.get("stderr", ""), name="invocation_stderr", attachment_type=allure.attachment_type.TEXT)
-        allure.attach(invocation.get("command", ""), name="invocation_command", attachment_type=allure.attachment_type.TEXT)
+        payload = {
+            "case_id": invocation.get("case_id"),
+            "backend": invocation.get("backend"),
+            "status": invocation.get("status"),
+            "return_code": invocation.get("return_code"),
+            "duration_seconds": invocation.get("duration_seconds"),
+            "command_metadata": invocation.get("command_metadata"),
+            "process_output": invocation.get("process_output"),
+            "error_summary": invocation.get("error_summary"),
+            "content_redacted": True,
+        }
+        allure.attach(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            name="invocation_redacted_metadata",
+            attachment_type=allure.attachment_type.JSON,
+        )
     except Exception:
         pass
