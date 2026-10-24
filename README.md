@@ -92,8 +92,8 @@ standard/
 准备 **Python 3.10+**。内置示例使用标准库，生成 20 个合成回放用例，演示文档转换、证据构建与质量决策。
 
 ```bash
-git clone https://github.com/zed123214/financial-pdf-skill-eval.git
-cd financial-pdf-skill-eval/financial-pdf-skill-eval-framework
+git clone https://github.com/zed123214/SkillGrow.git
+cd SkillGrow/financial-pdf-skill-eval-framework
 
 python -m tools.run_t6_baseline --output runs/demo-001 --verification-id demo-001
 ```
@@ -166,7 +166,7 @@ python -m pytest -m offline -q
 python -m unittest tests.test_16_findoc_t1 tests.test_17_openclaw_t2 tests.test_18_evidence_judge_t3 tests.test_19_quality_gate_t4 tests.test_20_runtime_isolation_t5 tests.test_21_t6_baseline -q
 ```
 
-欢迎贡献金融 PDF 用例、人工 GT、评分规则和诊断视图，也欢迎在 [Issues](https://github.com/zed123214/financial-pdf-skill-eval/issues) 讨论新的任务场景与接入设计。报告问题时请附上复现命令、Python 版本和相关产物；提交修改时请运行对应模块的测试。
+欢迎贡献金融 PDF 用例、人工 GT、评分规则和诊断视图，也欢迎在 [Issues](https://github.com/zed123214/SkillGrow/issues) 讨论新的任务场景与接入设计。报告问题时请附上复现命令、Python 版本和相关产物；提交修改时请运行对应模块的测试。
 
 ## 文档导航
 
